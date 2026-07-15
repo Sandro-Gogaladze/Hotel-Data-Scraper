@@ -1,0 +1,78 @@
+name: Monthly booking scrape
+
+on:
+  schedule:
+    # 06:00 UTC on the 1st of every month.
+    - cron: "0 6 1 * *"
+  workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab, for testing
+
+concurrency:
+  group: monthly-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      HEADLESS: "true"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      REPORT_RECIPIENT: ${{ secrets.REPORT_RECIPIENT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: Run fast test suite
+        id: fast_tests
+        run: uv run pytest
+
+      - name: Run live selector check against booking.com
+        id: live_tests
+        run: uv run pytest -m live
+
+      - name: Run monthly batch scrape
+        id: batch
+        run: uv run python scheduled/run_batch.py
+
+      # Runs only if fast_tests, live_tests, and batch all succeeded (default gating).
+      - name: Email results
+        run: uv run python scheduled/send_report.py success scheduled_results.json
+
+      # Test gate failed - booking.com likely changed markup. No scraping was attempted.
+      - name: Email test-gate failure alert
+        if: always() && (steps.fast_tests.outcome == 'failure' || steps.live_tests.outcome == 'failure')
+        run: |
+          uv run python scheduled/send_report.py alert \
+            "Test gate failed (fast tests: ${{ steps.fast_tests.outcome }}, live tests: ${{ steps.live_tests.outcome }}). \
+            This usually means booking.com changed its page markup. \
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      # Tests passed but every single search still failed (e.g. transient network/blocking issue).
+      - name: Email batch-failure alert
+        if: always() && steps.fast_tests.outcome == 'success' && steps.live_tests.outcome == 'success' && steps.batch.outcome == 'failure'
+        run: |
+          uv run python scheduled/send_report.py alert \
+            "Tests passed but all searches failed during the actual scrape. \
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Upload output files as workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: booking-data-${{ github.run_id }}
+          path: |
+            Booking_Data/*.xlsx
+            scheduled_results.json
+          if-no-files-found: ignore
+          retention-days: 90

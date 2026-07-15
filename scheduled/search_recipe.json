@@ -1,0 +1,18 @@
+{
+  "base_url": "https://www.booking.com/searchresults.en-gb.html",
+  "params": {
+    "label": "en-ge-booking-desktop-yQpPBuPmCYPIRLKRzinajgS652796015694:pl:ta:p1:p2:ac:ap:neg:fi:tikwd-65526620:lp9197880:li:dec:dm",
+    "aid": "2311236",
+    "ss": "Georgia",
+    "dest_id": "79",
+    "dest_type": "country",
+    "group_adults": "2",
+    "req_adults": "2",
+    "no_rooms": "1",
+    "group_children": "0",
+    "nflt": "ht_id=204"
+  },
+  "checkin_day": 15,
+  "checkout_day": 16,
+  "months_ahead": [0, 1, 2]
+}
