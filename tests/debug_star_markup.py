@@ -75,7 +75,11 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={"width": 1920, "height": 1080})
     page.goto(URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_selector(HOTEL_CARD, timeout=30000)
-    link = page.eval_on_selector('a[data-testid="title-link"]', "e => e.href")
+    # fixed, known 4-star property so local and CI compare the same page
+    link = ("https://www.booking.com/hotel/ge/golden-tulip-borjomi.html?aid=2311236&ucfs=1&arphpl=1"
+            "&checkin=2026-10-15&checkout=2026-10-16&dest_id=-2327786&dest_type=city"
+            "&group_adults=2&req_adults=2&no_rooms=1&group_children=0&req_children=0"
+            "&hpos=1&hapos=1&sr_order=popularity&selected_currency=GEL&from=searchresults")
     page.goto(link, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(2500)
     hotel = page.evaluate(r"""() => ({
