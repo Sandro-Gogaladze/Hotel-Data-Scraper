@@ -25,7 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes exact versions only - there is no floating v10 tag.
+      - uses: astral-sh/setup-uv@v10.2.0
 
       # --locked fails the run if uv.lock is out of date with pyproject.toml.
       # Python version comes from .python-version.
