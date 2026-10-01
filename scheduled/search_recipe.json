@@ -10,7 +10,8 @@
     "req_adults": "2",
     "no_rooms": "1",
     "group_children": "0",
-    "nflt": "ht_id=204"
+    "nflt": "ht_id=204",
+    "selected_currency": "GEL"
   },
   "checkin_day": 15,
   "checkout_day": 16,

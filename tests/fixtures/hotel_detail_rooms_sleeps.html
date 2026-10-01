@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+<!-- Mirrors the room table layout seen on some hotel pages since Sept 2026: occupancy is
+     shown once per room type ("Sleeps: 2 adults") in a rowspan cell, not in each rate row.
+     Rate rows are tied to their room type by the room id prefix of data-block-id. -->
+<table>
+  <tbody>
+    <tr class="js-rt-block-row" data-block-id="555001_900_2_42_0" data-hotel-rounded-price="148">
+      <td class="hprt-table-cell hprt-table-cell-roomtype" rowspan="2">
+        <a class="hprt-roomtype-link" href="#RD555001" data-room-id="555001">Double Room</a>
+        <div class="hprt-roomtype-block hprt-roomtype-occupancy-info"><span>Sleeps: <span class="hprt-roomtype-occupancy-text">2 adults</span></span></div>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-price"><span class="prco-valign-middle-helper">GEL&nbsp;148</span><span class="bui-u-sr-only">Price GEL&nbsp;148</span></td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">Fabulous breakfast GEL 30 Free cancellation before 13 October 2026</td>
+    </tr>
+    <tr class="js-rt-block-row" data-block-id="555001_900_2_41_0" data-hotel-rounded-price="238">
+      <td class="hprt-table-cell hprt-table-cell-price"><span class="prco-valign-middle-helper">GEL&nbsp;238</span><span class="bui-u-sr-only">Price GEL&nbsp;238</span></td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">Fabulous breakfast included Free cancellation before 13 October 2026</td>
+    </tr>
+    <tr class="js-rt-block-row" data-block-id="555002_900_0_42_0" data-hotel-rounded-price="210">
+      <td class="hprt-table-cell hprt-table-cell-roomtype" rowspan="1">
+        <a class="hprt-roomtype-link" href="#RD555002" data-room-id="555002">Family Room</a>
+        <div class="hprt-roomtype-block hprt-roomtype-occupancy-info"><span>Sleeps: <span class="hprt-roomtype-occupancy-text">2 adults, 1 child</span></span></div>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-price"><span class="prco-valign-middle-helper">GEL&nbsp;210</span><span class="bui-u-sr-only">Price GEL&nbsp;210</span></td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">Non-refundable</td>
+    </tr>
+    <tr class="js-rt-block-row" data-block-id="555003_900_2_42_0" data-hotel-rounded-price="120">
+      <td class="hprt-table-cell hprt-table-cell-roomtype" rowspan="1">
+        <a class="hprt-roomtype-link" href="#RD555003" data-room-id="555003">Budget Room</a>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-price"><span class="prco-valign-middle-helper">GEL&nbsp;120</span><span class="bui-u-sr-only">Price GEL&nbsp;120</span></td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">Non-refundable</td>
+    </tr>
+    <!-- Disabled room-type link (no photos): no data-room-id, id only in id= / name= -->
+    <tr class="js-rt-block-row" data-block-id="555004_900_1_42_0" data-hotel-rounded-price="99">
+      <th class="hprt-table-cell hprt-table-cell-roomtype" rowspan="2">
+        <a name="RD555004" class="hprt-roomtype-scroll-target"></a>
+        <a class="hprt-roomtype-link jq_tooltip disabled" id="room_type_id_555004">Single Room</a>
+        <div class="hprt-roomtype-block hprt-roomtype-occupancy-info"><span>Sleeps: <span class="hprt-roomtype-occupancy-text">1 adult</span></span></div>
+      </th>
+      <td class="hprt-table-cell hprt-table-cell-price"><span class="prco-valign-middle-helper">GEL&nbsp;99</span><span class="bui-u-sr-only">Price GEL&nbsp;99</span></td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">Non-refundable</td>
+    </tr>
+    <tr class="js-rt-block-row" data-block-id="555004_900_1_41_0" data-hotel-rounded-price="105">
+      <td class="hprt-table-cell hprt-table-cell-price"><span class="prco-valign-middle-helper">GEL&nbsp;105</span><span class="bui-u-sr-only">Price GEL&nbsp;105</span></td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">Free cancellation before 13 October 2026</td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

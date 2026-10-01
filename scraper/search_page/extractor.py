@@ -28,6 +28,21 @@ from .locators import (
 )
 from config import ELEMENT_TIMEOUT
 
+def normalize_review_score(text: str) -> str:
+    """Reduce review score text to the bare number, e.g. "Scored 8.7" -> "8.7".
+
+    The first child of the review-score block is screen-reader text ("Scored 8.7"),
+    so the raw selector result includes the word.
+    """
+    match = re.search(r"\d+(?:\.\d+)?", text or "")
+    return match.group(0) if match else "N/A"
+
+def normalize_star_rating(label: str) -> str:
+    """Reduce a star aria-label to "N out of 5", e.g.
+    "Property rating: 4 out of 5 stars" -> "4 out of 5" (the pre-Sept-2026 format)."""
+    match = re.search(r"(\d+(?:\.\d+)?)\s*out of 5", label or "")
+    return f"{match.group(1)} out of 5" if match else "N/A"
+
 def get_all_hotel_elements(page: Any) -> List[Any]:
     """
     Retrieve all hotel card elements from the search results page.
@@ -109,7 +124,10 @@ def extract_review_info(hotel_element: Any) -> Dict[str, str]:
         count = safe_extract(hotel_element, CONTENT_REVIEW_COUNT)
         if count != "N/A":
             review_info["Number of Reviews"] = count
-    
+
+    if review_info["Review Score"] != "N/A":
+        review_info["Review Score"] = normalize_review_score(review_info["Review Score"])
+
     # Step 4: Most robust approach - try JavaScript extraction specifically for review text
     if review_info["Review Text"] == "N/A" or review_info["Review Text"] == review_info["Review Score"]:
         try:
@@ -242,7 +260,7 @@ def extract_hotel_basic_info(hotel_element: Any, index: int) -> Dict[str, Any]:
         star_element = hotel_element.locator(STAR_RATING).first
         # Retrieve the "aria-label" attribute which contains the star rating.
         stars_attr = star_element.get_attribute("aria-label", timeout=ELEMENT_TIMEOUT)
-        hotel_data["Stars"] = stars_attr if stars_attr else "N/A"
+        hotel_data["Stars"] = normalize_star_rating(stars_attr)
     except Exception as e:
         log_message(f"Error extracting stars for hotel {hotel_data.get('Hotel Name', 'Unknown')}", "debug")
         hotel_data["Stars"] = "N/A"
@@ -321,7 +339,9 @@ def batch_extract_basic_info(page: Any) -> List[Dict[str, Any]]:
                     }
                 }
                 
-                hotelData["Review Score"] = scoreEl && scoreEl.innerText ? scoreEl.innerText.trim() : "N/A";
+                // The first child is screen-reader text ("Scored 8.7"), so keep only the number.
+                const scoreNum = scoreEl && scoreEl.innerText ? scoreEl.innerText.match(/\\d+(?:\\.\\d+)?/) : null;
+                hotelData["Review Score"] = scoreNum ? scoreNum[0] : "N/A";
                 
                 // Similar robust approach for review text (Excellent, Very good, etc.)
                 let textEl = null;
@@ -439,9 +459,11 @@ def batch_extract_basic_info(page: Any) -> List[Dict[str, Any]]:
                     }
                 }
                 
-                // Extract star rating
-                const starElement = card.querySelector('div[aria-label*="out of 5"]');
-                hotelData["Stars"] = starElement ? starElement.getAttribute("aria-label") : "N/A";
+                // Extract star rating. The label lives on a <button> since Sept 2026
+                // ("Property rating: 4 out of 5 stars"); normalize to "4 out of 5".
+                const starElement = card.querySelector('[aria-label*="out of 5"]');
+                const starMatch = starElement ? starElement.getAttribute("aria-label").match(/(\\d+(?:\\.\\d+)?)\\s*out of 5/) : null;
+                hotelData["Stars"] = starMatch ? `${starMatch[1]} out of 5` : "N/A";
                 
                 // Add index for tracking
                 hotelData["Index"] = hotels.length + 1;

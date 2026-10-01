@@ -10,7 +10,23 @@ ROOM_ROW = "tr[data-block-id][data-hotel-rounded-price]"
 # Selector for a room row element that contains a block ID and a hotel rounded price.
 
 ROOM_PRICE_ATTRIBUTE = "data-hotel-rounded-price"
-# Attribute name on a room row which holds the hotel's rounded room price.
+# Attribute name on a room row which holds the hotel's rounded room price. Note: it's in
+# the hotel's own currency, not the displayed one - use DISPLAY_PRICE_JS for the price.
+
+DISPLAY_PRICE_JS = """(row) => {
+    const cell = row.querySelector('.hprt-table-cell-price');
+    if (!cell) return '';
+    const sr = Array.from(cell.querySelectorAll('.bui-u-sr-only'))
+        .map(el => el.textContent).join(' ').replace(/\\s+/g, ' ');
+    const m = sr.match(/current price\\D*([0-9][0-9,]*(?:\\.[0-9]+)?)/i) ||
+              sr.match(/price\\D*([0-9][0-9,]*(?:\\.[0-9]+)?)/i);
+    if (m) return m[1];
+    const shown = cell.querySelector('.prco-valign-middle-helper');
+    const s = shown ? shown.textContent.match(/[0-9][0-9,]*(?:\\.[0-9]+)?/) : null;
+    return s ? s[0] : '';
+}"""
+# JavaScript function (as a string) returning the price a room row displays (the current
+# price if discounted), as a numeric string such as "1,322".
 
 
 # Occupancy selectors
@@ -26,45 +42,37 @@ NO_AVAILABILITY = "div:has-text('We have no availability')"
 # Selector for an element that indicates there is no availability.
 
 
-# Room feature JavaScript selectors
+# Room feature JavaScript selectors. These read the *visible* text (innerText) of the row's
+# conditions cell: textContent also includes hidden tooltip/modal text that mentions
+# "non-refundable" and breakfast prices on rows where neither applies.
 FREE_CANCELLATION_JS = """(row) => {
-    const elems = row.querySelectorAll('*');
-    for (const el of elems) {
-        if (el.textContent && el.textContent.includes('Free cancellation')) {
-            return el.textContent;
-        }
-    }
-    return '';
+    const text = (row.querySelector('.hprt-table-cell-conditions') || row).innerText || '';
+    return /free cancellation/i.test(text) ? 'Free cancellation' : '';
 }"""
-# JavaScript function (as a string) to search through a row's elements for a mention
-# of "Free cancellation", returning the corresponding text if found.
+# JavaScript function (as a string) returning "Free cancellation" if the row's visible
+# conditions mention it, else ''.
 
 NON_REFUNDABLE_JS = """(row) => {
-    const elems = row.querySelectorAll('*');
-    for (const el of elems) {
-        if (el.textContent) {
-            const txt = el.textContent.toLowerCase();
-            if (txt.includes('non-refundable') || txt.includes('non refundable') || txt.includes('no refund')) {
-                return el.textContent;
-            }
-        }
-    }
-    return '';
+    const text = (row.querySelector('.hprt-table-cell-conditions') || row).innerText || '';
+    const m = text.match(/non-refundable|non refundable|no refund/i);
+    return m ? m[0] : '';
 }"""
-# JavaScript function (as a string) to check all elements in a row for phrases that indicate
-# a non-refundable booking and return the found text.
+# JavaScript function (as a string) returning the non-refundable phrase found in the
+# row's visible conditions, else ''.
 
 HAS_BREAKFAST_JS = """(row) => {
-    return row.textContent.toLowerCase().includes('breakfast');
+    const text = (row.querySelector('.hprt-table-cell-conditions') || row).innerText || '';
+    return /breakfast|all[- ]inclusive|all meals/i.test(text);
 }"""
-# JavaScript function (as a string) to determine if a row's text mentions 'breakfast'.
+# JavaScript function (as a string) to determine if the row's visible conditions mention a meal plan.
 
 BREAKFAST_TEXT_JS = """(row) => {
-    const lines = row.textContent.split('\\n');
-    return lines.filter(line => line.toLowerCase().includes('breakfast')).join(' ');
+    const text = (row.querySelector('.hprt-table-cell-conditions') || row).innerText || '';
+    const line = text.split('\\n').find(l => /breakfast|all[- ]inclusive|all meals/i.test(l));
+    return line ? line.replace(/\\s+/g, ' ').trim() : '';
 }"""
-# JavaScript function (as a string) that extracts and joins all lines from a row's text 
-# which mention 'breakfast', in order to produce a fuller breakfast description.
+# JavaScript function (as a string) returning the visible meal-plan line, e.g.
+# "Very good breakfast included" or "Very good breakfast GEL 70".
 
 MAX_PERSONS_JS = """(row) => {
     const span = row.querySelector('span.bui-u-sr-only');

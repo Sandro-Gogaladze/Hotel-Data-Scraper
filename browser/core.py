@@ -20,7 +20,8 @@ from utils.anti_detection import configure_page_for_stealth, get_random_user_age
 from config import PAGE_LOAD_TIMEOUT
 from playwright.sync_api import Browser, Page
 
-def create_new_page(browser: Browser, url: Optional[str] = None, timeout: int = PAGE_LOAD_TIMEOUT) -> Page:
+def create_new_page(browser: Browser, url: Optional[str] = None, timeout: int = PAGE_LOAD_TIMEOUT,
+                    storage_state: Optional[Dict[str, Any]] = None) -> Page:
     """
     Create a new browser page and optionally navigate to a given URL.
 
@@ -28,16 +29,20 @@ def create_new_page(browser: Browser, url: Optional[str] = None, timeout: int = 
         browser (Browser): A Playwright Browser instance.
         url (Optional[str]): URL to navigate to. If None, no navigation is performed.
         timeout (int): Navigation timeout in milliseconds. Defaults to PAGE_LOAD_TIMEOUT.
+        storage_state (Optional[Dict[str, Any]]): Cookies of the run's pinned session
+            (see scraper/session.py), or None for a fresh session.
 
     Returns:
         Page: The newly created Playwright page object.
     """
     log_message("Creating new browser page with anti-detection", "debug")
-    
-    # Create a new page with randomized settings
-    page: Page = browser.new_page(
+
+    # Each page gets its own context so it can carry the run's session cookies
+    context = browser.new_context(
         viewport={'width': 1920, 'height': 1080},  # Standard desktop viewport
+        storage_state=storage_state,
     )
+    page: Page = context.new_page()
     
     # Configure anti-detection measures
     configure_page_for_stealth(page)
@@ -83,6 +88,6 @@ def close_page(page: Page) -> None:
     try:
         if page:
             log_message("Closing browser page", "debug")
-            page.close()
+            page.context.close()  # create_new_page gives every page its own context
     except Exception as e:
         log_message(f"Error closing page: {e}", "warning")

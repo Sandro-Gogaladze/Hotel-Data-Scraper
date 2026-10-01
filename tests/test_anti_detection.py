@@ -9,6 +9,21 @@ def test_get_random_user_agent_returns_known_agent():
     assert get_random_user_agent() in USER_AGENTS
 
 
+def test_user_agents_match_the_chromium_actually_launched():
+    """A UA that disagrees with the real engine (old Chrome, Firefox, Safari) gets
+    degraded pages from booking.com, so every UA must claim the bundled Chromium version."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        major = browser.version.split(".")[0]
+        browser.close()
+
+    for ua in USER_AGENTS:
+        assert f"Chrome/{major}.0.0.0" in ua
+        assert "Firefox" not in ua and "Version/" not in ua
+
+
 def test_launch_options_basic_structure():
     options = get_browser_launch_options(headless=True, worker_id=1)
 
@@ -17,21 +32,19 @@ def test_launch_options_basic_structure():
     assert any(arg.startswith("--user-agent=") for arg in options["args"])
 
 
-def test_launch_options_headless_adds_headless_only_flags():
-    options = get_browser_launch_options(headless=True, worker_id=1)
+def test_headed_and_headless_launch_the_same_browser_the_same_way():
+    """Local runs are headed and GitHub Actions runs are headless; nothing else may
+    differ, so both produce the same data."""
+    for worker_id in range(6):
+        headless = get_browser_launch_options(headless=True, worker_id=worker_id)
+        headed = get_browser_launch_options(headless=False, worker_id=worker_id)
 
-    assert "--disable-dev-tools" in options["args"]
-    assert "--mute-audio" in options["args"]
-    # headed mode should not carry these
-    assert "slow_mo" not in options
-
-
-def test_launch_options_headed_sets_slow_mo():
-    options = get_browser_launch_options(headless=False, worker_id=2)
-
-    assert "slow_mo" in options
-    assert options["slow_mo"] == 50 + (2 * 10)
-    assert "--disable-dev-tools" not in options["args"]
+        assert headless.pop("headless") is True and headed.pop("headless") is False
+        # the user agent is picked at random per launch; compare everything else
+        strip_ua = lambda o: {**o, "args": [a for a in o["args"] if not a.startswith("--user-agent=")]}
+        assert strip_ua(headless) == strip_ua(headed)
+        assert headed["channel"] == "chromium"  # full Chromium build, not the headless shell
+        assert "slow_mo" not in headed
 
 
 def test_launch_options_worker_variation():

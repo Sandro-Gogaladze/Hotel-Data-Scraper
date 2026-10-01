@@ -129,6 +129,30 @@ def extract_booking_params(url: str) -> Dict[str, Any]:
     
     return params
 
+def propagate_currency(search_url: str, hotel_url: str) -> str:
+    """
+    Copy the search URL's selected_currency onto a hotel URL.
+
+    Hotel links on the search page don't carry selected_currency, so without this the
+    hotel page falls back to the visitor's location-based currency and room prices
+    can come back in a different currency from the search page's prices.
+
+    Args:
+        search_url (str): The Booking.com search URL (may or may not pin a currency)
+        hotel_url (str): A hotel link scraped from that search page
+
+    Returns:
+        str: hotel_url with selected_currency set, or unchanged if the search doesn't pin one
+    """
+    currency = urllib.parse.parse_qs(urllib.parse.urlparse(search_url).query).get("selected_currency")
+    if not currency or not hotel_url or not hotel_url.startswith("http"):
+        return hotel_url
+
+    parsed = urllib.parse.urlparse(hotel_url)
+    query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    query["selected_currency"] = [currency[0]]
+    return urllib.parse.urlunparse(parsed._replace(query=urllib.parse.urlencode(query, doseq=True)))
+
 def get_search_summary(url: str) -> str:
     """
     Generate a human-readable summary of the search parameters.

@@ -21,7 +21,7 @@ project_root = os.path.abspath(os.path.dirname(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from config import EXCEL_ERROR_COLOR, OUTPUT_DIR
+from config import EXCEL_ERROR_COLOR, HEADLESS, OUTPUT_DIR
 from scraper.hotel_page.detailed_extractor import extract_detailed_info
 from utils.anti_detection import add_random_delay, get_browser_launch_options
 from utils.logger import log_message
@@ -175,7 +175,8 @@ def main() -> None:
     parser.add_argument("workbook", nargs="?", default=None, help="Workbook to patch. Defaults to latest in Booking_Data.")
     parser.add_argument("--output", default=None, help="Output workbook path. Defaults to *_retry_filled_<time>.xlsx.")
     parser.add_argument("--max-retries", type=int, default=4, help="Retries per failed hotel.")
-    parser.add_argument("--headed", action="store_true", help="Run Chromium with a visible window.")
+    parser.add_argument("--headed", action="store_true",
+                        help="Run Chromium with a visible window (the default unless HEADLESS=true).")
     args = parser.parse_args()
 
     input_path = args.workbook or latest_workbook()
@@ -185,7 +186,7 @@ def main() -> None:
         input_path=input_path,
         output_path=output_path,
         max_retries=args.max_retries,
-        headless=not args.headed,
+        headless=HEADLESS and not args.headed,
     )
 
     print(f"Input workbook: {input_path}")

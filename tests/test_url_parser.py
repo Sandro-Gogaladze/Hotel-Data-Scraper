@@ -1,4 +1,32 @@
-from utils.url_parser import extract_booking_params
+from urllib.parse import parse_qs, urlparse
+
+from utils.url_parser import extract_booking_params, propagate_currency
+
+HOTEL_URL = "https://www.booking.com/hotel/ge/frida.en-gb.html?aid=2311236&checkin=2026-10-15&group_adults=2"
+
+
+def test_propagate_currency_copies_search_currency_to_hotel_link():
+    search = "https://www.booking.com/searchresults.en-gb.html?ss=Georgia&selected_currency=GEL"
+
+    out = propagate_currency(search, HOTEL_URL)
+
+    q = parse_qs(urlparse(out).query)
+    assert q["selected_currency"] == ["GEL"]
+    assert q["checkin"] == ["2026-10-15"]  # existing params kept
+    assert urlparse(out).path == "/hotel/ge/frida.en-gb.html"
+
+
+def test_propagate_currency_overrides_existing_currency_on_hotel_link():
+    search = "https://www.booking.com/searchresults.html?selected_currency=USD"
+
+    out = propagate_currency(search, HOTEL_URL + "&selected_currency=EUR")
+
+    assert parse_qs(urlparse(out).query)["selected_currency"] == ["USD"]
+
+
+def test_propagate_currency_leaves_link_alone_when_search_has_no_currency():
+    assert propagate_currency("https://www.booking.com/searchresults.html?ss=Tbilisi", HOTEL_URL) == HOTEL_URL
+    assert propagate_currency("https://www.booking.com/searchresults.html?selected_currency=GEL", "N/A") == "N/A"
 
 
 def test_extract_full_params():
