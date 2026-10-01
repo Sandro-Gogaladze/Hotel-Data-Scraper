@@ -19,17 +19,17 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from utils.logger import log_message
-from utils.url_parser import propagate_currency
+from utils.url_parser import propagate_search_params
 from scraper.search_page.basic_extractor import extract_basic_info
 from scraper.session import establish_session
 from scraper.hotel_page.process_based_extractor import process_all_details_processes
 from config import HEADLESS  # Import HEADLESS from config
 
-def pin_hotel_link_currency(hotels: List[Dict[str, Any]], search_url: str) -> None:
-    """Make each hotel page use the search's selected_currency (if any), so room prices
-    are in the same currency as the search page's Price column."""
+def pin_hotel_link_params(hotels: List[Dict[str, Any]], search_url: str) -> None:
+    """Make each hotel page use the search's currency and language, so room prices match
+    the search page and star ratings are shown (see propagate_search_params)."""
     for hotel in hotels:
-        hotel["Hotel Link"] = propagate_currency(search_url, hotel.get("Hotel Link", "N/A"))
+        hotel["Hotel Link"] = propagate_search_params(search_url, hotel.get("Hotel Link", "N/A"))
 
 def display_progress_estimate(start_time: float, total_hotels: int, processed_hotels: int) -> None:
     """
@@ -94,7 +94,7 @@ def process_booking_search(browser: Any, url: str) -> List[Dict[str, Any]]:
         return []
     
     log_message(f"Found {len(basic_hotels)} hotels on search page", "info")
-    pin_hotel_link_currency(basic_hotels, url)
+    pin_hotel_link_params(basic_hotels, url)
 
     # Phase 2: Process hotel details in parallel using multiple processes.
     log_message(f"🔍 Phase 2: Extracting detailed information for {len(basic_hotels)} hotels", "info")
@@ -140,7 +140,7 @@ def process_booking_search_with_progress(browser: Any, url: str, progress_callba
         return []
     
     log_message(f"Found {len(basic_hotels)} hotels on search page", "info")
-    pin_hotel_link_currency(basic_hotels, url)
+    pin_hotel_link_params(basic_hotels, url)
 
     # Update progress with total count
     if progress_callback:

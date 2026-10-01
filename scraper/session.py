@@ -26,7 +26,7 @@ from scraper.hotel_page.locators import NO_AVAILABILITY, ROOM_ROW
 from scraper.search_page.locators import HOTEL_CARD, HOTEL_LINK
 from utils.anti_detection import configure_page_for_stealth
 from utils.logger import log_message
-from utils.url_parser import propagate_currency
+from utils.url_parser import propagate_search_params
 
 FULL_ROOM_TABLE = "td.hprt-table-cell-occupancy"             # per-row occupancy column
 REDUCED_ROOM_TABLE = ".hprt-roomtype-occupancy-info"         # "Sleeps: 2 adults" per room type
@@ -53,7 +53,7 @@ def _probe(context: Any, search_url: str) -> Optional[str]:
     seen = None
     for link in links:
         try:
-            page.goto(propagate_currency(search_url, link), wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT)
+            page.goto(propagate_search_params(search_url, link), wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT)
             page.wait_for_selector(f"{ROOM_ROW}, {NO_AVAILABILITY}", timeout=25000)
         except Exception as e:
             log_message(f"Session probe: skipping a hotel that didn't load: {e}", "debug")

@@ -129,28 +129,31 @@ def extract_booking_params(url: str) -> Dict[str, Any]:
     
     return params
 
-def propagate_currency(search_url: str, hotel_url: str) -> str:
+def propagate_search_params(search_url: str, hotel_url: str) -> str:
     """
-    Copy the search URL's selected_currency onto a hotel URL.
+    Copy the search URL's selected_currency and lang onto a hotel URL.
 
-    Hotel links on the search page don't carry selected_currency, so without this the
-    hotel page falls back to the visitor's location-based currency and room prices
-    can come back in a different currency from the search page's prices.
+    Hotel links on the search page carry neither, so without this the hotel page falls
+    back to the visitor's location: room prices come back in a different currency from
+    the search page's, and from a US address booking.com shows no star rating at all
+    unless lang is set explicitly (lang=en-gb restores it, the .en-gb path alone doesn't).
 
     Args:
-        search_url (str): The Booking.com search URL (may or may not pin a currency)
+        search_url (str): The Booking.com search URL
         hotel_url (str): A hotel link scraped from that search page
 
     Returns:
-        str: hotel_url with selected_currency set, or unchanged if the search doesn't pin one
+        str: hotel_url carrying whichever of those parameters the search sets
     """
-    currency = urllib.parse.parse_qs(urllib.parse.urlparse(search_url).query).get("selected_currency")
-    if not currency or not hotel_url or not hotel_url.startswith("http"):
+    search_query = urllib.parse.parse_qs(urllib.parse.urlparse(search_url).query)
+    carried = {k: search_query[k] for k in ("selected_currency", "lang") if search_query.get(k)}
+    if not carried or not hotel_url or not hotel_url.startswith("http"):
         return hotel_url
 
     parsed = urllib.parse.urlparse(hotel_url)
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-    query["selected_currency"] = [currency[0]]
+    for key, value in carried.items():
+        query[key] = [value[0]]
     return urllib.parse.urlunparse(parsed._replace(query=urllib.parse.urlencode(query, doseq=True)))
 
 def get_search_summary(url: str) -> str:

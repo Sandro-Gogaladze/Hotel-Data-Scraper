@@ -39,13 +39,15 @@ def _is_number(value: str) -> bool:
 def _search_url() -> str:
     """Hotels only (nflt=ht_id=204), like the scheduled runs. Without that filter the
     results are mostly apartments and guesthouses, which have no star rating, so the
-    star check below would fail for a reason that has nothing to do with our selectors."""
+    star check below would fail for a reason that has nothing to do with our selectors.
+    lang=en-gb matters too: from a US address (GitHub runners) booking.com shows no star
+    ratings at all without it."""
     checkin = date.today() + timedelta(days=30)
     checkout = checkin + timedelta(days=2)
     return (
         "https://www.booking.com/searchresults.html"
         f"?ss=Paris&checkin={checkin.isoformat()}&checkout={checkout.isoformat()}"
-        "&group_adults=2&no_rooms=1&group_children=0&nflt=ht_id%3D204"
+        "&group_adults=2&no_rooms=1&group_children=0&nflt=ht_id%3D204&lang=en-gb"
     )
 
 

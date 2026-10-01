@@ -11,7 +11,8 @@
     "no_rooms": "1",
     "group_children": "0",
     "nflt": "ht_id=204",
-    "selected_currency": "GEL"
+    "selected_currency": "GEL",
+    "lang": "en-gb"
   },
   "checkin_day": 15,
   "checkout_day": 16,
