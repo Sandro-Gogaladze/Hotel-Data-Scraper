@@ -33,8 +33,9 @@ CONTENT_REVIEW_COUNT = "div[data-testid='review-score'] div:has-text('reviews')"
 # Full section for content parsing as a last resort
 REVIEW_SECTION = "div[data-testid='review-score']"
 
-# Star rating selector
-STAR_RATING = "div[aria-label*='out of 5']"
+# Star rating selector. Tag-agnostic: the aria-label moved from a <div> ("4 out of 5")
+# to a <button> ("Property rating: 4 out of 5 stars") in Sept 2026.
+STAR_RATING = "[aria-label*='out of 5']"
 
 # Navigation selectors
 LOAD_MORE_BUTTON = "button:has-text('Load more results')"

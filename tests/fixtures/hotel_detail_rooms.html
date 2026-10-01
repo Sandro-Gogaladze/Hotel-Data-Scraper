@@ -2,25 +2,48 @@
 <html>
 <head><meta charset="utf-8"></head>
 <body>
+<!-- data-hotel-rounded-price is in the hotel's own currency (USD here), while the page
+     displays GEL. The scraper must report the displayed price. Row 102 is discounted. -->
 <table>
   <tbody>
-    <tr class="js-rt-block-row" data-block-id="101" data-hotel-rounded-price="180">
-      <td>
-        <span data-component="MAX-OCCUPANCY"><span class="sr-only">Max persons: 2</span></span>
+    <tr class="js-rt-block-row" data-block-id="101" data-hotel-rounded-price="69">
+      <td class="hprt-table-cell hprt-table-cell-occupancy">
+        <div class="c-occupancy-icons"><span class="c-occupancy-icons__adults" aria-hidden="true"><i class="bicon bicon-occupancy"></i><i class="bicon bicon-occupancy"></i></span><span class="bui-u-sr-only">Max persons: 2</span></div>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-price">
+        <div class="bui-price-display__value" aria-hidden="true"><span class="prco-valign-middle-helper">GEL&nbsp;180</span></div>
+        <span class="bui-u-sr-only">Price GEL&nbsp;180</span>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">
         <div>Free cancellation before check-in</div>
         <div data-component="mealplan-name">Breakfast included in the price</div>
+        <!-- hidden tooltip text, like live pages: must not affect this row's flags -->
+        <div style="display:none">Compare with our non-refundable rate. Breakfast for extra guests GEL 20 extra.</div>
       </td>
     </tr>
-    <tr class="js-rt-block-row" data-block-id="102" data-hotel-rounded-price="132">
-      <td>
+    <tr class="js-rt-block-row" data-block-id="102" data-hotel-rounded-price="51">
+      <td class="hprt-table-cell hprt-table-cell-occupancy">
         <i class="bicon-occupancy"></i><i class="bicon-occupancy"></i>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-price">
+        <div class="bui-price-display__original" aria-hidden="true">GEL&nbsp;155</div>
+        <div class="bui-price-display__value" aria-hidden="true"><span class="prco-valign-middle-helper">GEL&nbsp;132</span></div>
+        <span class="bui-u-sr-only">Original price GEL&nbsp;155 Current price GEL&nbsp;132</span>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">
         <div>Non-refundable rate</div>
         <div data-component="mealplan-name">Breakfast &euro;15 extra per person</div>
       </td>
     </tr>
-    <tr class="js-rt-block-row" data-block-id="103" data-hotel-rounded-price="250">
-      <td>
-        <span data-component="MAX-OCCUPANCY"><span class="sr-only">Max persons: 3</span></span>
+    <tr class="js-rt-block-row" data-block-id="103" data-hotel-rounded-price="96">
+      <td class="hprt-table-cell hprt-table-cell-occupancy">
+        <div class="c-occupancy-icons"><span class="c-occupancy-icons__adults" aria-hidden="true"><i class="bicon bicon-occupancy"></i><i class="bicon bicon-occupancy"></i><i class="bicon bicon-occupancy"></i></span><span class="bui-u-sr-only">Max persons: 3</span></div>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-price">
+        <div class="bui-price-display__value" aria-hidden="true"><span class="prco-valign-middle-helper">GEL&nbsp;1,250</span></div>
+        <span class="bui-u-sr-only">Price GEL&nbsp;1,250</span>
+      </td>
+      <td class="hprt-table-cell hprt-table-cell-conditions">
         <div>Standard rate</div>
       </td>
     </tr>

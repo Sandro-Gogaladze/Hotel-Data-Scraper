@@ -8,8 +8,8 @@ live-site drift (see tests/test_live_smoke.py for that).
 
 from conftest import load_fixture
 
-from scraper.hotel_page.detailed_extractor import analyze_rooms, extract_rooms_with_js
-from scraper.hotel_page.locators import NO_AVAILABILITY
+from scraper.hotel_page.detailed_extractor import analyze_rooms, extract_room_details, extract_rooms_with_js
+from scraper.hotel_page.locators import NO_AVAILABILITY, ROOM_ROW
 
 
 def test_extract_rooms_with_js(page):
@@ -21,25 +21,80 @@ def test_extract_rooms_with_js(page):
 
     room_a, room_b, room_c = rooms
 
+    # displayed price, not data-hotel-rounded-price (hotel's own currency: 69 / 51 / 96)
     assert room_a["price"] == 180
     assert room_a["max_persons"] == 2
     assert room_a["free_cancellation"] is True
-    assert room_a["non_refundable"] is False
+    assert room_a["non_refundable"] is False  # hidden tooltip mentions non-refundable
     assert room_a["has_breakfast_mention"] is True
     assert room_a["breakfast_included"] is True
+    assert room_a["breakfast_text"] == "Breakfast included in the price"
 
-    assert room_b["price"] == 132
+    assert room_b["price"] == 132  # current price, not the struck-through GEL 155
     assert room_b["max_persons"] == 2  # derived from occupancy icons, not sr-only text
     assert room_b["free_cancellation"] is False
     assert room_b["non_refundable"] is True
     assert room_b["has_breakfast_mention"] is True
     assert room_b["breakfast_included"] is False  # "extra" disqualifies it
 
-    assert room_c["price"] == 250
+    assert room_c["price"] == 1250  # "GEL 1,250"
     assert room_c["max_persons"] == 3
     assert room_c["free_cancellation"] is False
     assert room_c["non_refundable"] is False
     assert room_c["has_breakfast_mention"] is False
+
+
+def test_occupancy_label_en_us_wording(page):
+    """lang=en-us pages say "Max. people: 3" instead of "Max persons: 3"."""
+    page.set_content("""
+        <table><tr class="js-rt-block-row" data-block-id="1" data-hotel-rounded-price="9">
+          <td class="hprt-table-cell-occupancy"><span class="bui-u-sr-only">Max. people: 3</span></td>
+          <td class="hprt-table-cell-price"><span class="bui-u-sr-only">Price GEL 300</span></td>
+          <td class="hprt-table-cell-conditions">Costs 50% to cancel</td>
+        </tr></table>""")
+
+    [room] = extract_rooms_with_js(page)
+    [row] = page.query_selector_all(ROOM_ROW)
+
+    assert room["max_persons"] == 3
+    assert extract_room_details(row, "Test Hotel", 0)["max_persons"] == 3
+    # partial-refund policy: neither free cancellation nor non-refundable
+    assert room["free_cancellation"] is False
+    assert room["non_refundable"] is False
+
+
+def test_dom_fallback_uses_displayed_price(page):
+    page.set_content(load_fixture("hotel_detail_rooms.html"))
+
+    rows = page.query_selector_all(ROOM_ROW)
+    rooms = [extract_room_details(row, "Test Hotel", i) for i, row in enumerate(rows)]
+
+    assert [r["price"] for r in rooms] == [180, 132, 1250]
+    assert [r["max_persons"] for r in rooms] == [2, 2, 3]
+    assert [r["free_cancellation"] for r in rooms] == [True, False, False]
+    assert [r["non_refundable"] for r in rooms] == [False, True, False]
+    assert rooms[0]["breakfast_text"] == "Breakfast included in the price"
+
+
+def test_extract_rooms_with_js_sleeps_layout(page):
+    """Occupancy shown once per room type ("Sleeps: ...") applies to all its rate rows."""
+    page.set_content(load_fixture("hotel_detail_rooms_sleeps.html"))
+
+    rooms = extract_rooms_with_js(page)
+
+    assert [r["price"] for r in rooms] == [148, 238, 210, 120, 99, 105]
+    # both rate rows of the Double Room, even though only the first contains the cell
+    assert rooms[0]["max_persons"] == 2
+    assert rooms[1]["max_persons"] == 2
+    assert rooms[2]["max_persons"] == 3  # "2 adults, 1 child"
+    # no occupancy anywhere: unknown, not silently assumed to be a 2-person room
+    assert rooms[3]["max_persons"] is None
+    # disabled room-type link: room id only in id="room_type_id_..." / name="RD..."
+    assert rooms[4]["max_persons"] == 1
+    assert rooms[5]["max_persons"] == 1
+
+    assert rooms[0]["breakfast_included"] is False  # "breakfast GEL 30"
+    assert rooms[1]["breakfast_included"] is True
 
 
 def test_no_availability_selector_matches_fixture(page):
@@ -51,6 +106,7 @@ def test_no_availability_selector_matches_fixture(page):
 def test_analyze_rooms_picks_min_price_and_min_2_person_price(monkeypatch):
     # analyze_rooms calls out to GPT only when a room's breakfast text is ambiguous;
     # stub it so this test doesn't depend on network access or an API key.
+    monkeypatch.setattr("scraper.hotel_page.detailed_extractor.OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(
         "scraper.hotel_page.detailed_extractor.analyze_breakfast_with_gpt4",
         lambda text: "included" in text.lower(),
@@ -95,6 +151,32 @@ def test_analyze_rooms_picks_min_price_and_min_2_person_price(monkeypatch):
 
     # cheapest room among 2-person rooms is also the 132 one (same room here)
     assert result["Min 2 Person Price"] == 132
+
+
+def test_analyze_rooms_without_api_key_keeps_keyword_heuristic(monkeypatch):
+    def gpt_must_not_be_called(text):
+        raise AssertionError("GPT should not be called without an API key")
+
+    monkeypatch.setattr("scraper.hotel_page.detailed_extractor.OPENAI_API_KEY", None)
+    monkeypatch.setattr(
+        "scraper.hotel_page.detailed_extractor.analyze_breakfast_with_gpt4",
+        gpt_must_not_be_called,
+    )
+
+    rooms = [{
+        "price": 180,
+        "max_persons": 2,
+        "free_cancellation": True,
+        "non_refundable": False,
+        "has_breakfast_mention": True,
+        "breakfast_included": True,
+        "breakfast_text": "Breakfast included in the price",
+    }]
+
+    result = analyze_rooms(rooms, "No Key Hotel")
+
+    assert result["Min Room Price Breakfast Included"] is True
+    assert result["Min 2 Person Price Breakfast Included"] is True
 
 
 def test_analyze_rooms_empty_list_returns_na_defaults():

@@ -2,17 +2,19 @@
 <html>
 <head><meta charset="utf-8"></head>
 <body>
+<!-- Mirrors live booking.com markup as of Sept 2026: star rating is an aria-label on a
+     <button>, and the review block's first child is screen-reader text ("Scored 8.7"). -->
 <div data-testid="property-card">
   <div data-testid="title">Hotel Frida</div>
   <a data-testid="title-link" href="https://www.booking.com/hotel/ge/frida.html">Hotel Frida</a>
   <span data-testid="address-link">123 Rustaveli Ave, Tbilisi</span>
   <span data-testid="price-and-discounted-price">$180</span>
-  <div data-testid="review-score">
-    <div class="bc946a29db">8.7</div>
-    <div aria-hidden="false"><div class="becbee2f63">Excellent</div></div>
-    <div class="eaa845879">1,204 reviews</div>
+  <span><button aria-label="Property rating: 4 out of 5 stars" type="button"><div data-testid="rating-stars" aria-hidden="true" role="img"></div></button></span>
+  <div data-testid="review-score" class="a81870d302">
+    <div class="bc946a29db">Scored 8.7 </div>
+    <div aria-hidden="true" class="f63b14ab7a dff2e52086">8.7</div>
+    <div aria-hidden="false" class="aa225776f2"><div class="f63b14ab7a f546354b44 becbee2f63">Excellent </div><div class="fff1944c52 fb14de7f14 eaa8455879">1,204 reviews</div></div>
   </div>
-  <div aria-label="4 out of 5 stars">4-star hotel</div>
 </div>
 
 <div data-testid="property-card">
@@ -20,12 +22,19 @@
   <a data-testid="title-link" href="https://www.booking.com/hotel/ge/kazbegi-estate.html">Kazbegi Estate</a>
   <span data-testid="address">Stepantsminda, Georgia</span>
   <span data-testid="price-and-discounted-price">$95</span>
-  <div data-testid="review-score">
-    <div class="a81870d302">7.2</div>
-    <div aria-hidden="false"><div class="f63b14ab7a">Good</div></div>
-    <div class="fff1944c52">340 reviews</div>
+  <span><button aria-label="Property rating: 3 out of 5 for accommodation quality" type="button"><div data-testid="rating-squares" aria-hidden="true" role="img"></div></button></span>
+  <div data-testid="review-score" class="a81870d302">
+    <div class="bc946a29db">Scored 7.2 </div>
+    <div aria-hidden="true" class="f63b14ab7a dff2e52086">7.2</div>
+    <div aria-hidden="false" class="aa225776f2"><div class="f63b14ab7a f546354b44 becbee2f63">Good </div><div class="fff1944c52 fb14de7f14 eaa8455879">340 reviews</div></div>
   </div>
-  <div aria-label="3 out of 5 stars">3-star hotel</div>
+</div>
+
+<div data-testid="property-card">
+  <div data-testid="title">New Guesthouse</div>
+  <a data-testid="title-link" href="https://www.booking.com/hotel/ge/new-guesthouse.html">New Guesthouse</a>
+  <span data-testid="address">Batumi</span>
+  <span data-testid="price-and-discounted-price">$40</span>
 </div>
 </body>
 </html>

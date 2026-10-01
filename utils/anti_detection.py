@@ -5,23 +5,38 @@ This module provides functions to help avoid bot detection by rotating user agen
 adding random delays, and configuring browser settings to appear more human-like.
 """
 
+import json
+import os
 import random
 import time
 from typing import Dict, Any, List
 from utils.logger import log_message
 
-# Modern, realistic user agents
+def _bundled_chromium_major() -> str:
+    """Major version of the Chromium build Playwright launches (e.g. "133"), read from
+    Playwright's own browsers.json so it follows Playwright upgrades."""
+    try:
+        import playwright
+        path = os.path.join(os.path.dirname(playwright.__file__), "driver", "package", "browsers.json")
+        with open(path, encoding="utf-8") as f:
+            for browser in json.load(f)["browsers"]:
+                if browser["name"] == "chromium":
+                    return browser["browserVersion"].split(".")[0]
+    except Exception:
+        pass
+    return "133"  # Chromium bundled with the pinned playwright==1.50.0
+
+CHROME_MAJOR_VERSION = _bundled_chromium_major()
+
+# Chrome user agents matching the Chromium version actually running. Claiming an older
+# Chrome, Firefox or Safari on a Chromium engine is an easy bot signal: sessions like that
+# were sometimes served a cut-down room table (missing cheaper rates) or pages that never
+# loaded, while sessions with a matching user agent got the same page as a normal visitor.
 USER_AGENTS = [
     # Chrome on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    # Chrome on macOS  
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    # Firefox on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    # Safari on macOS
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-    # Edge on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.2210.77"
+    f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME_MAJOR_VERSION}.0.0.0 Safari/537.36",
+    # Chrome on macOS
+    f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME_MAJOR_VERSION}.0.0.0 Safari/537.36",
 ]
 
 def get_random_user_agent() -> str:
@@ -83,27 +98,17 @@ def get_browser_launch_options(headless: bool = True, worker_id: int = 0) -> Dic
         args.append('--disable-logging')
     if worker_id % 3 == 0:
         args.append('--disable-plugins')
-    
-    # Additional args for headless mode
-    if headless:
-        args.extend([
-            '--disable-dev-tools',
-            '--mute-audio'
-        ])
-        # Vary image loading by worker to create different fingerprints
-        if worker_id % 2 == 0:
-            args.append('--disable-images')
-    
-    launch_options = {
+
+    # Headed (local) and headless (GitHub Actions) runs use the same options apart from
+    # the headless flag itself, so both see the same pages and produce the same data:
+    # the full Chromium build in both modes (channel="chromium" runs it in the new
+    # headless mode, instead of Playwright's separate chromium-headless-shell build),
+    # identical args, and no slow_mo delays in headed mode.
+    return {
         'headless': headless,
-        'args': args
+        'channel': 'chromium',
+        'args': args,
     }
-    
-    # Only add slow_mo when not headless (for debugging)
-    if not headless:
-        launch_options['slow_mo'] = 50 + (worker_id * 10)  # Vary slow_mo by worker
-        
-    return launch_options
 
 def configure_page_for_stealth(page) -> None:
     """

@@ -52,10 +52,11 @@ CLI, or fully unattended on a monthly schedule with results emailed automaticall
 
 ## Requirements
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) for dependency management
-- An OpenAI API key (optional — only needed for breakfast-inclusion analysis and the
-  failure analyzer; the scraper itself runs fine without one)
+- [uv](https://docs.astral.sh/uv/) for dependency management (`brew install uv` on macOS).
+  It installs Python 3.12 from `.python-version` for you — the pinned numpy/pandas
+  have no wheels for Python 3.14.
+- An OpenAI API key (optional — used for breakfast-inclusion analysis and the failure
+  analyzer; without one, breakfast inclusion falls back to a keyword check)
 
 ## Quick start
 
@@ -148,7 +149,7 @@ var override (`HEADLESS=true`) for environments with no display, like CI — tha
 the automated run below relies on.
 
 `.env` only needs `OPENAI_API_KEY` (see `.env.example`), and only if you want
-breakfast-inclusion analysis.
+GPT-based breakfast-inclusion analysis.
 
 ## Automated monthly run
 
@@ -202,7 +203,7 @@ uv run pytest -m live      # slow, opt-in: hits the real site to check selectors
   `test_config_headless.py`, `test_url_generator.py`, `test_run_batch.py`,
   `test_send_report.py`) cover pure logic with no browser involved.
 - **Fixture-based regression tests** (`tests/test_search_page_extraction.py`,
-  `tests/test_hotel_page_extraction.py`) load saved local HTML snapshots into a real
+  `tests/test_hotel_page_extraction.py`, `tests/test_navigation.py`) load saved local HTML snapshots into a real
   headless Chromium page and run the actual extraction functions against them. These
   catch regressions in *our* code but won't detect drift on the live site, since the
   fixtures are static.
@@ -237,7 +238,8 @@ uv run python fail_analyzer.py
 
 ## Anti-detection
 
-- 5 rotating desktop user agents (Chrome/Firefox/Safari/Edge)
+- Rotating Chrome user agents (Windows/macOS) that match the Chromium version Playwright
+  actually launches — claiming an older Chrome, Firefox or Safari gets degraded pages
 - Stealth init scripts (hides `navigator.webdriver`, spoofs plugins/languages)
 - Randomized delays between actions and staggered worker startup (`worker_id * 2s`)
 - Per-worker Chromium flag variation (image loading, logging, plugins) to diversify

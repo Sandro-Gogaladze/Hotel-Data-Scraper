@@ -28,6 +28,14 @@ from utils.anti_detection import get_browser_launch_options
 pytestmark = pytest.mark.live
 
 
+def _is_number(value: str) -> bool:
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 def _search_url() -> str:
     checkin = date.today() + timedelta(days=30)
     checkout = checkin + timedelta(days=2)
@@ -60,6 +68,12 @@ def test_search_page_selectors_still_resolve(live_browser):
         first = hotels[0]
         assert first["Hotel Name"] not in ("", "N/A"), "Hotel name selector may be stale"
         assert first["Hotel Link"].startswith("http"), "Hotel link selector may be stale"
+
+        # Not every property has stars or reviews, but a whole page with none means the
+        # selector broke. This is how Stars went 100% N/A in Sept 2026 while this test
+        # still passed.
+        assert any(h["Stars"] != "N/A" for h in hotels), "Star rating selector may be stale"
+        assert any(_is_number(h["Review Score"]) for h in hotels), "Review score selector may be stale"
     finally:
         page.close()
 
@@ -91,6 +105,7 @@ def test_hotel_detail_page_selectors_still_resolve(live_browser):
 
         rooms = extract_rooms_with_js(detail_page)
         assert len(rooms) > 0, "No rooms extracted — hotel detail page selectors may be stale"
-        assert rooms[0]["price"] > 0
+        assert rooms[0]["price"] > 0, "Displayed room price selectors may be stale"
+        assert any(r["max_persons"] is not None for r in rooms), "Room occupancy selectors may be stale"
     finally:
         detail_page.close()

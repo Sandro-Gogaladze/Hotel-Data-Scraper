@@ -9,7 +9,7 @@ from each hotel card.
 import os
 import sys
 import time
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 
 # Ensure the project root is in sys.path regardless of the current working directory.
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -22,7 +22,7 @@ from browser.navigation import wait_for_initial_load, load_all_items
 from scraper.search_page.locators import HOTEL_CARD
 from scraper.search_page.extractor import extract_hotel_basic_info, get_all_hotel_elements, batch_extract_basic_info
 
-def extract_basic_info(browser: Any, url: str) -> List[Dict[str, Any]]:
+def extract_basic_info(browser: Any, url: str, storage_state: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
     Open the Booking.com search page, wait for all hotel results to load,
     and extract basic information for each hotel.
@@ -34,6 +34,7 @@ def extract_basic_info(browser: Any, url: str) -> List[Dict[str, Any]]:
     Args:
         browser (Any): A Playwright browser instance.
         url (str): The URL of the Booking.com search results page.
+        storage_state (Optional[Dict[str, Any]]): The run's pinned session cookies, if any.
 
     Returns:
         List[Dict[str, Any]]: A list of dictionaries, each containing basic hotel data.
@@ -42,7 +43,7 @@ def extract_basic_info(browser: Any, url: str) -> List[Dict[str, Any]]:
     extraction_start_time = time.time()
     
     # Open a new page and navigate to the search results URL.
-    page = create_new_page(browser, url)
+    page = create_new_page(browser, url, storage_state=storage_state)
     log_message(f"Navigated to search page: {url}", "info")
     
     # Wait for the initial page load and then load all hotel items (using infinite scroll logic).

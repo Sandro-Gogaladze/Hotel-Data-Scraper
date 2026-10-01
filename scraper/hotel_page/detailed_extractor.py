@@ -22,10 +22,10 @@ if project_root not in sys.path:
 from utils.logger import log_message
 from browser.core import create_new_page, close_page
 from playwright.sync_api import sync_playwright
-from config import HEADLESS, HOTEL_WAIT_TIMEOUT, INITIAL_NAVIGATION_TIMEOUT, URL_LOADING_REFRESH_TIMEOUT
+from config import HEADLESS, HOTEL_WAIT_TIMEOUT, INITIAL_NAVIGATION_TIMEOUT, URL_LOADING_REFRESH_TIMEOUT, OPENAI_API_KEY
 from analyzers.breakfast import analyze_breakfast_with_gpt4
 from scraper.hotel_page.locators import (
-    ROOM_ROW, ROOM_PRICE_ATTRIBUTE, OCCUPANCY_ICON, NO_AVAILABILITY,
+    ROOM_ROW, DISPLAY_PRICE_JS, OCCUPANCY_ICON, NO_AVAILABILITY,
     FREE_CANCELLATION_JS, NON_REFUNDABLE_JS, HAS_BREAKFAST_JS,
     BREAKFAST_TEXT_JS, MAX_PERSONS_JS
 )
@@ -46,11 +46,11 @@ def extract_room_details(row: Any, hotel_name: str, room_index: int) -> Optional
     log_message(f"Extracting details for room #{room_index + 1} at {hotel_name}", "debug")
     room_details: Dict[str, Any] = {}
 
-    # --- Extract the price using the ROOM_PRICE_ATTRIBUTE ---
-    price_str: str = row.get_attribute(ROOM_PRICE_ATTRIBUTE) or ""
+    # --- Extract the displayed price (ROOM_PRICE_ATTRIBUTE is in the hotel's own currency) ---
+    price_str: str = row.evaluate(DISPLAY_PRICE_JS) or ""
     try:
         # Clean the price string and convert it to an integer.
-        room_details["price"] = int(price_str.strip())
+        room_details["price"] = round(float(price_str.replace(",", "").strip()))
     except Exception as e:
         log_message(f"Could not convert price '{price_str}' to int: {e}", "debug")
         return None
@@ -58,7 +58,8 @@ def extract_room_details(row: Any, hotel_name: str, room_index: int) -> Optional
     # --- Extract maximum occupancy: either via screen reader text or occupancy icons ---
     try:
         sr_only_text = row.evaluate(MAX_PERSONS_JS)
-        match = re.search(r"Max persons:\s*(\d+)", sr_only_text)
+        # "Max persons: 2" (en-gb) or "Max. people: 2" (en-us)
+        match = re.search(r"Max\.?\s*(?:persons|people):\s*(\d+)", sr_only_text, re.IGNORECASE)
         if match:
             max_persons = int(match.group(1))
         else:
@@ -153,13 +154,19 @@ def analyze_rooms(rooms: List[Dict[str, Any]], hotel_name: str) -> Dict[str, Any
         log_message(f"Found minimum price 2-person room: ${min_price_2person['price']}", "info")
     
     # --- Use GPT-4 to determine whether breakfast is included for free ---
-    if min_price_overall["has_breakfast_mention"]:
+    # Without an API key every call fails and returns False, which would overwrite the
+    # keyword heuristic already computed during extraction - so keep that instead.
+    use_gpt = bool(OPENAI_API_KEY)
+    if not use_gpt:
+        log_message("OPENAI_API_KEY not set - using keyword heuristic for breakfast", "debug")
+
+    if use_gpt and min_price_overall["has_breakfast_mention"]:
         min_price_overall["breakfast_included"] = analyze_breakfast_with_gpt4(
             min_price_overall["breakfast_text"]
         )
         log_message(f"Breakfast included in min price room: {min_price_overall['breakfast_included']}", "info")
 
-    if min_price_2person and min_price_2person["has_breakfast_mention"]:
+    if use_gpt and min_price_2person and min_price_2person["has_breakfast_mention"]:
         # Only analyze if the 2-person room is different from the overall min price room
         if min_price_2person is not min_price_overall:
             min_price_2person["breakfast_included"] = analyze_breakfast_with_gpt4(
@@ -457,29 +464,59 @@ def extract_rooms_with_js(page: Any) -> List[Dict[str, Any]]:
             }
             
             console.log(`Found ${roomRows.length} potential room rows`);
-            
+
+            // Newer layout: occupancy is shown once per room type ("Sleeps: 2 adults") in a
+            // rowspan cell, not in each rate row. Map room id -> total guests so every rate
+            // row can look it up via the room id prefix of its data-block-id.
+            const occupancyOf = (cell) => {
+                const occEl = cell.querySelector('.hprt-roomtype-occupancy-text');
+                const counts = occEl ? occEl.textContent.match(/[0-9]+/g) : null;
+                return counts ? counts.reduce((sum, n) => sum + parseInt(n), 0) : null;
+            };
+            const occupancyByRoom = {};
+            for (const cell of document.querySelectorAll('.hprt-table-cell-roomtype')) {
+                const occ = occupancyOf(cell);
+                if (occ === null) continue;
+                // The room id is in data-room-id, or only in id="room_type_id_<id>" /
+                // name="RD<id>" when the room-type link is disabled (no photos).
+                for (const el of cell.querySelectorAll('[data-room-id], [id^="room_type_id_"], a[name^="RD"]')) {
+                    const id = el.getAttribute('data-room-id') ||
+                               (el.id || '').replace('room_type_id_', '') ||
+                               (el.getAttribute('name') || '').replace(/^RD/, '');
+                    if (/^[0-9]+$/.test(id)) occupancyByRoom[id] = occ;
+                }
+            }
+
+            // Fallback: a rowspan room-type cell applies to the rows after it, in table order.
+            let tableOrderOccupancy = null;
+
             for (let i = 0; i < roomRows.length; i++) {
                 const row = roomRows[i];
+                const roomTypeCell = row.querySelector('.hprt-table-cell-roomtype');
+                if (roomTypeCell) tableOrderOccupancy = occupancyOf(roomTypeCell);
                 try {
                     const roomDetails = {};
                     
-                    // Extract price - try multiple approaches
-                    let priceStr = row.getAttribute('data-block-price') || 
-                                  row.getAttribute('data-hotel-rounded-price') || "";
-                    
-                    // If no price attribute, try to find price in text content
-                    if (!priceStr || priceStr === "") {
-                        // Look for price in text content with currency symbols
-                        const priceMatch = row.textContent.match(/(?:€|\\$|£|¥|USD|EUR|GBP)\\s*([0-9,.]+)/);
-                        if (priceMatch) {
-                            priceStr = priceMatch[1].replace(/[^0-9]/g, '');
-                        }
+                    // Extract the price the page displays. Don't use data-hotel-rounded-price:
+                    // it's in the hotel's own currency (e.g. USD for some chains) rather than
+                    // the currency shown, so prices from different hotels weren't comparable.
+                    // Screen-reader text is "Price GEL 377", or "Original price GEL 174
+                    // Current price GEL 148" when discounted.
+                    const priceCell = row.querySelector('.hprt-table-cell-price');
+                    let priceStr = "";
+                    if (priceCell) {
+                        const srText = Array.from(priceCell.querySelectorAll('.bui-u-sr-only'))
+                            .map(el => el.textContent).join(' ').replace(/\\s+/g, ' ');
+                        const srMatch = srText.match(/current price\\D*([0-9][0-9,]*(?:\\.[0-9]+)?)/i) ||
+                                        srText.match(/price\\D*([0-9][0-9,]*(?:\\.[0-9]+)?)/i);
+                        const shown = priceCell.querySelector('.prco-valign-middle-helper');
+                        const shownMatch = shown ? shown.textContent.match(/[0-9][0-9,]*(?:\\.[0-9]+)?/) : null;
+                        priceStr = srMatch ? srMatch[1] : (shownMatch ? shownMatch[0] : "");
                     }
-                    
-                    // Try to parse the price
-                    const price = parseInt(priceStr.trim());
+
+                    const price = Math.round(parseFloat(priceStr.replace(/,/g, '')));
                     if (isNaN(price)) {
-                        console.log(`Could not parse price "${priceStr}" for row ${i}`);
+                        console.log(`Could not parse displayed price "${priceStr}" for row ${i}`);
                         continue; // Skip this row if price parsing fails
                     }
                     
@@ -489,55 +526,57 @@ def extract_rooms_with_js(page: Any) -> List[Dict[str, Any]]:
                     let maxPersons = null;
                     // Try to find explicit max persons label
                     const maxPersonsText = row.querySelector('[data-component="MAX-OCCUPANCY"] .sr-only')?.textContent || 
-                                         row.textContent.match(/Max persons:\\s*([0-9]+)/)?.[1] || "";
+                                         row.textContent.match(/Max\\.?\\s*(?:persons|people):\\s*([0-9]+)/i)?.[1] || "";  // en-gb / en-us wording
                     
+                    const roomId = (row.getAttribute('data-block-id') || '').split('_')[0];
                     if (maxPersonsText && /[0-9]+/.test(maxPersonsText)) {
                         maxPersons = parseInt(maxPersonsText.match(/[0-9]+/)[0]);
+                    } else if (roomId in occupancyByRoom) {
+                        maxPersons = occupancyByRoom[roomId];
+                    } else if (tableOrderOccupancy !== null) {
+                        maxPersons = tableOrderOccupancy;
                     } else {
                         // Count person icons
                         const personIcons = row.querySelectorAll('.bui-avatar-block, i.bicon-occupancy');
                         if (personIcons.length > 0) {
                             maxPersons = personIcons.length;
-                        } else {
-                            // Default to 2 if we can't determine
-                            maxPersons = 2;
                         }
+                        // Otherwise leave null: guessing 2 here hid the Sept 2026 layout
+                        // change by silently turning every room into a "2 person" room.
                     }
                     roomDetails.max_persons = maxPersons;
                     
-                    // Check for free cancellation
-                    const policyText = row.textContent || "";
-                    roomDetails.free_cancellation = policyText.includes('Free cancellation');
-                    roomDetails.non_refundable = policyText.toLowerCase().includes('non-refundable') || 
-                                               policyText.toLowerCase().includes('non refundable') ||
-                                               policyText.toLowerCase().includes('no refund');
-                    
-                    // Check for breakfast
-                    const hasBreakfast = policyText.toLowerCase().includes('breakfast');
+                    // Policies and meal plan come from the conditions cell's *visible* text.
+                    // row.textContent also holds hidden tooltip/modal text, which marked
+                    // free-cancellation rates as non-refundable and fed GPT the wrong
+                    // breakfast text.
+                    const conditionsCell = row.querySelector('.hprt-table-cell-conditions') || row;
+                    const policyText = conditionsCell.innerText || "";
+                    const policyLower = policyText.toLowerCase();
+                    roomDetails.free_cancellation = policyLower.includes('free cancellation');
+                    roomDetails.non_refundable = policyLower.includes('non-refundable') ||
+                                               policyLower.includes('non refundable') ||
+                                               policyLower.includes('no refund');
+
+                    // Meal plan line, e.g. "Very good breakfast included" / "Very good breakfast GEL 70"
+                    const mealPattern = /breakfast|all[- ]inclusive|all meals/i;
+                    const mealElement = row.querySelector('[data-component="mealplan-name"]');
+                    const breakfastText = (mealElement ? mealElement.innerText :
+                        (policyText.split('\\n').find(line => mealPattern.test(line)) || ""))
+                        .replace(/\\s+/g, ' ').trim();
+                    const hasBreakfast = mealPattern.test(breakfastText);
                     roomDetails.has_breakfast_mention = hasBreakfast;
-                    
-                    // Get breakfast text if mentioned
-                    let breakfastText = "";
-                    if (hasBreakfast) {
-                        // Try to extract the breakfast description
-                        const breakfastElement = row.querySelector('[data-component="mealplan-name"]');
-                        if (breakfastElement) {
-                            breakfastText = breakfastElement.textContent;
-                        } else {
-                            // Extract the sentence containing "breakfast"
-                            const sentences = policyText.split(/[.!?]\\s+/);
-                            breakfastText = sentences.find(s => s.toLowerCase().includes('breakfast')) || "";
-                        }
-                    }
-                    roomDetails.breakfast_text = breakfastText.trim();
-                    
-                    // Determine if breakfast is included
-                    roomDetails.breakfast_included = hasBreakfast && 
-                        (breakfastText.toLowerCase().includes('included') || 
-                         breakfastText.toLowerCase().includes('free breakfast')) &&
-                        !breakfastText.toLowerCase().includes('extra') &&
-                        !breakfastText.toLowerCase().includes('additional') &&
-                        !breakfastText.toLowerCase().includes('surcharge');
+                    roomDetails.breakfast_text = breakfastText;
+
+                    // Keyword guess; analyze_rooms() refines it with GPT when a key is set
+                    const breakfastLower = breakfastText.toLowerCase();
+                    roomDetails.breakfast_included = hasBreakfast &&
+                        (breakfastLower.includes('included') ||
+                         breakfastLower.includes('free breakfast') ||
+                         /all[- ]inclusive/.test(breakfastLower)) &&
+                        !breakfastLower.includes('extra') &&
+                        !breakfastLower.includes('additional') &&
+                        !breakfastLower.includes('surcharge');
                     
                     // Log successful extraction for debugging
                     console.log(`Successfully extracted room ${i+1}: price=${roomDetails.price}, persons=${roomDetails.max_persons}`);

@@ -24,16 +24,18 @@ from utils.anti_detection import get_browser_launch_options, add_random_delay
 from scraper.hotel_page.detailed_extractor import extract_detailed_info
 from config import MAX_WORKERS, HEADLESS, URL_LOADING_REFRESH_TIMEOUT
 
-def worker_process_queue(task_queue, result_queue, worker_id: int):
+def worker_process_queue(task_queue, result_queue, worker_id: int, storage_state: Optional[Dict[str, Any]] = None):
     """
     Worker process that takes hotels from a queue and processes them one by one
     using a SINGLE browser and SINGLE page instance for all hotels. This improves performance
     by avoiding the overhead of browser/page startup/shutdown for each hotel.
-    
+
     Args:
         task_queue: A multiprocessing queue containing hotel dictionaries to process
         result_queue: A multiprocessing queue to store processed hotel results
         worker_id (int): The ID of this worker for logging purposes
+        storage_state: The run's pinned session cookies (see scraper/session.py), so every
+            worker sees the same version of the site; None for a fresh session
     """
     log_message(f"[Worker #{worker_id}] Starting worker process", "info")
     log_message(f"[Worker #{worker_id}] URL loading refresh timeout: {URL_LOADING_REFRESH_TIMEOUT}s", "debug")
@@ -53,8 +55,8 @@ def worker_process_queue(task_queue, result_queue, worker_id: int):
             launch_options = get_browser_launch_options(headless=HEADLESS, worker_id=worker_id)
             browser = p.chromium.launch(**launch_options)
             log_message(f"[Worker #{worker_id}] Browser launched successfully", "info")
-            # Create a single page for this worker
-            page = browser.new_page()
+            # Create a single page for this worker, in the run's pinned session
+            page = browser.new_context(storage_state=storage_state).new_page()
             
             # Configure the page to handle slow loading URLs
             page.set_default_timeout(60000)  # 60 seconds total timeout
@@ -110,9 +112,10 @@ def worker_process_queue(task_queue, result_queue, worker_id: int):
     return hotels_processed
 
 def process_all_details_processes(
-    hotels: List[Dict[str, Any]], 
+    hotels: List[Dict[str, Any]],
     max_workers: int = MAX_WORKERS,
-    progress_callback: Optional[Callable[[int], None]] = None
+    progress_callback: Optional[Callable[[int], None]] = None,
+    storage_state: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Process a list of hotel dictionaries concurrently using a ProcessPoolExecutor with a queue system.
@@ -125,6 +128,7 @@ def process_all_details_processes(
             "Hotel Name", "Hotel Link", and "Index".
         max_workers (int): The maximum number of concurrent processes to use (default from config).
         progress_callback (Optional[Callable[[int], None]]): Optional callback for progress updates.
+        storage_state (Optional[Dict[str, Any]]): The run's pinned session cookies, shared with every worker.
 
     Returns:
         List[Dict[str, Any]]: The list of hotel dictionaries updated with detailed information.
@@ -152,7 +156,7 @@ def process_all_details_processes(
     for worker_id in range(max_workers):
         process = multiprocessing.Process(
             target=worker_process_queue,
-            args=(task_queue, result_queue, worker_id)
+            args=(task_queue, result_queue, worker_id, storage_state)
         )
         process.start()
         processes.append(process)
@@ -219,7 +223,8 @@ def process_all_details_processes(
 def process_all_details_processes_with_progress(
     hotels: List[Dict[str, Any]], 
     progress_callback: Optional[Callable[[Optional[int], Optional[int]], None]] = None,
-    max_workers: int = MAX_WORKERS
+    max_workers: int = MAX_WORKERS,
+    storage_state: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Process a list of hotel dictionaries concurrently with enhanced progress tracking.
@@ -229,6 +234,7 @@ def process_all_details_processes_with_progress(
         hotels (List[Dict[str, Any]]): A list of hotel dictionaries
         progress_callback: Callback function that accepts (total, current) parameters
         max_workers (int): The maximum number of concurrent processes to use
+        storage_state (Optional[Dict[str, Any]]): The run's pinned session cookies
 
     Returns:
         List[Dict[str, Any]]: The list of hotel dictionaries updated with detailed information.
@@ -242,5 +248,6 @@ def process_all_details_processes_with_progress(
     return process_all_details_processes(
         hotels=hotels,
         max_workers=max_workers,
-        progress_callback=internal_progress_callback
+        progress_callback=internal_progress_callback,
+        storage_state=storage_state
     )

@@ -18,10 +18,12 @@ if project_root not in sys.path:
 
 from utils.logger import log_message
 from config import (
-    SCROLL_DELAY, LOAD_MORE_TIMEOUT, LOAD_MORE_DELAY, 
+    SCROLL_DELAY, LOAD_MORE_TIMEOUT, LOAD_MORE_DELAY, LOAD_MORE_RETRIES,
     INITIAL_LOAD_DELAY, RETRY_COUNT, RETRY_DELAY
 )
 from playwright.sync_api import Page
+
+LOAD_MORE_SELECTOR = "button:has-text('Load more results')"
 
 def wait_for_initial_load(page: Page) -> None:
     """
@@ -71,7 +73,7 @@ def click_load_more_button(page: Page, current_count: int) -> Tuple[bool, int]:
         Tuple[bool, int]: A tuple where the first element is a boolean indicating
         success (True if new items loaded), and the second element is the new count.
     """
-    load_more_btn = page.locator("button:has-text('Load more results')")
+    load_more_btn = page.locator(LOAD_MORE_SELECTOR)
     
     if not load_more_btn.is_visible():
         log_message("No 'Load More Results' button found", "debug")
@@ -173,7 +175,22 @@ def load_all_items(page: Page, selector: str = "div[data-testid='property-card']
             if no_change_count >= max_no_change:
                 # Try clicking the "Load more" button
                 button_success, new_count = click_load_more_button(page, current_count)
-                
+
+                # A slow response can outlast click_load_more_button's wait even though
+                # more results exist (Sept 2026: one search stopped at 646 of ~800). The
+                # button is gone at the true end of the list, so retry while it's shown.
+                retries = 0
+                while not button_success and retries < LOAD_MORE_RETRIES:
+                    late_count = len(page.locator(selector).all())
+                    if late_count > current_count:
+                        button_success, new_count = True, late_count
+                        break
+                    if not page.locator(LOAD_MORE_SELECTOR).is_visible():
+                        break
+                    retries += 1
+                    log_message(f"'Load more' loaded nothing new, retrying ({retries}/{LOAD_MORE_RETRIES})", "warning")
+                    button_success, new_count = click_load_more_button(page, current_count)
+
                 if button_success:
                     current_count = new_count
                     no_change_count = 0  # Reset the counter if we got new items
