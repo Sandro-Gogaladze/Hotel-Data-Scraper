@@ -68,3 +68,27 @@ with sync_playwright() as p:
 
     print("\nScraped Stars values:", [h["Stars"] for h in batch_extract_basic_info(page)][:8])
     browser.close()
+
+# --- also check the hotel page, as a possible source of the star rating ---
+with sync_playwright() as p:
+    browser = p.chromium.launch(**get_browser_launch_options(headless=True))
+    page = browser.new_page(viewport={"width": 1920, "height": 1080})
+    page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_selector(HOTEL_CARD, timeout=30000)
+    link = page.eval_on_selector('a[data-testid="title-link"]', "e => e.href")
+    page.goto(link, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(2500)
+    hotel = page.evaluate(r"""() => ({
+        title: document.title.split(',')[0],
+        testids: [...new Set([...document.querySelectorAll('[data-testid]')]
+            .map(e => e.getAttribute('data-testid')).filter(t => /rating|star|class|quality/i.test(t)))],
+        aria: [...new Set([...document.querySelectorAll('[aria-label]')]
+            .map(e => e.getAttribute('aria-label')).filter(l => /out of|star/i.test(l)))].slice(0, 6),
+        rating_html: (document.querySelector('[data-testid="rating-stars"], [data-testid="rating-squares"], .hp__hotel_ratings')?.outerHTML
+            || '(none)').replace(/<svg[\s\S]*?<\/svg>/g, '<svg/>').slice(0, 300),
+    })""")
+    print("\n=== HOTEL PAGE:", hotel["title"])
+    print("  rating-ish data-testids:", hotel["testids"])
+    print("  aria-labels:", hotel["aria"])
+    print("  rating element:", hotel["rating_html"])
+    browser.close()
